@@ -30,7 +30,7 @@ public class Test {
     }
 
     public static void runCountMode() throws InterruptedException {
-        int n = 1024 * 128;
+        int n = 1024 * 256;
         List<String[]> list = new LinkedList<>();
 
         for (int i = 0; i < n; i++) {
@@ -39,6 +39,9 @@ public class Test {
 
             if (i % 100 == 0) {
                 Thread.sleep(SLEEP);
+            }
+            if (i % (1024 * 16) == 0) {
+                list = new LinkedList<>();
             }
         }
     }
