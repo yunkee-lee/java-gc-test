@@ -1,10 +1,8 @@
 # Garbage Collectors - G1GC & ZGC
-## Common Terminology
-- Stop-The-World (STW): halting all application threads
 
 ## G1GC
 - Garbage First Garbage Collector
-- reclaims heap during STW and GC pause
+- reclaims heap during Stop-The-World (STW, halting all application threads) and GC pause
 - geared towards consistently short STW times and more overall time in GC
 - a generational collector
 	- 2 types of heap in young generation (in order to weed out transient data that manages to survive through an epoch cycle or two)
@@ -225,3 +223,35 @@
 - Long-term goal
   - make ZGC generational: higher allocation rates, lower heap overhead, lower CPU usage
   - sub-ms max pause times (WIP)
+
+## Appendix
+
+- JIT (Just-in-time) compliation: compliation at runtime
+  - compiles a series of bytecode to native machine code and performs certain optimizations as well
+
+- Class loader: responsible for loading Java classes during runtime dinamically to JVM
+  - load classes into memory when they're required by an application
+
+- Finalizer: executed during object destruction, prior to the object being deallocated, and is complementary to an initializer
+
+- Strong reference: the default type/class of a reference object
+  - An object is strongly reachable if it can be reached by some thread without traversing any reference objects. A newly-created object is strongly reachable by the thread that created it.
+
+- Soft reference
+  - cleared at the discretion of GC in response to memory demand
+  - all soft references to softly-reachable objects are guaranteed to have been cleared before JVM throws an `OutOfMemoryError`
+  - most often used to implement memory-sensitive caches
+  - An object is softly reachable if it is not strongly reachable but can be reached by traversing a soft reference.
+  - Suppose an object is softly reachable, GC may choose to clear atomically all soft references to that object and all soft references to any other softly reachable objects from which that object is reachable through a chain of strong references
+
+- Weak reference
+  - Weak reference objects do not prevent their referent from being made finalizable, finalized, and then reclaimed
+  - most often used to implement canonicalizing mappings
+  - An object is weakly reachable if it is neither strongly nor softly reachable but can be reached by traversing a weak reference. When the weak references to a weakly-reachable object are cleared, the object becomes eligible for finalization.
+  - Suppose an object is weakly rechable. GC will clear atomically all weak references to that object, and all weak references to any other weakly reachable objects from which that object is reaschable through a chain of strong and soft references
+
+- Phantom reference
+  - enqueued after GC determines that their referents may otherwise be reclaimed
+  - most often used to schedule post-mortem cleanup actions
+  - An object is phantom reachable if it is neither strongly, softly, nor weakly reachable, it has been finalized, and some phantom reference refers to it
+  - Suppose an object is phantom reachable, GC will atomically clear all phantom references to that object and all phantom references to any other phantom reachable objects from which that object is reachable
