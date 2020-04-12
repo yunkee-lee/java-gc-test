@@ -4,6 +4,9 @@
 - Garbage First Garbage Collector
 - reclaims heap during Stop-The-World (STW, halting all application threads) and GC pause
 - geared towards consistently short STW times and more overall time in GC
+- optimized for throughput/latency balance
+  - higher pause -> higher throughput, higher latency
+  - lower pause -> lower throughput, lower latency
 - a generational collector
 	- 2 types of heap in young generation (in order to weed out transient data that manages to survive through an epoch cycle or two)
 		- **Eden**
@@ -34,7 +37,7 @@
 - Eden
 	- consists of objects that are allocated since the current epoch started
 	- all new objects except Humongous objects are allocated here
-- Survivor
+- Survivor (From & To)
 	- From consists of objects that have survived at least one epoch
 	- To is allocated but empty during epoch
 	- objects surviving long enough get promoted to Tenured
@@ -72,7 +75,7 @@
 	- the main driver of STW time is the size and amount of objects being copied
 
 - GC events
-	- minor: Eden + From -> To
+	- minor (or young): Eden + From -> To
 	- mixed: minor + reclaiming Tenured region
 	- full GC: all regions evacuated
 	- minor/mixed + To-space exhaustion: minor/mixed + rollback + full GC
@@ -97,27 +100,35 @@
 	- allocation failure from Free space triggers Full GC
 	- MPCMC runs more often when Humongous objects are present as G1 checks IHOP threshold at every humongous object allocation
 
-- Disadvantages
-	- too little heaps -> Full GC
-	- Full GC is only performed when G1GC determines that the usual mode of operation is no longer possible
+- Enhancements since JDK 11
+  - Abortable mixed GC
+    - collection set is split into mandatory and optional regions
+    - optional regions get collected incrementally until there is no time left
+  - Uncommit at remark
+  - Old Gen on NVDIMM
+  - Eliminate locks,
+  - RemSet space reductions
+  - Container awareness
+  - 2% improvement in throughput and 18% improvement in responsiveness between JDK 11 and JDK 14
 
 ## ZGC
 - pause times don't exceed **10ms**
 - pause times don't increase with the heap or live-set size
-	- they do increase with the root-set size (# of Java threads)
+	- they do increase with the root-set size (number of Java threads)
 - handle heaps ranging from a 8MB to 16TB in size (16TB since JDK 13, otherwise 4TB)
 
 - ZGC divides heap into regions, also called ZPages, which can be dynamically sized (unlike the G1GC)
 - ZGC compacts heap by moving live objects from one page to another
 - ZGC is **not** a generational GC (no generation)
+- optimized for scalability and low latency
 
 - Pointer Coloring
 	- ZGC stores additional information in heap references
 	- possible because of 64-bit platforms; ZGC is 64-bit only
 	- 4-bits of possible states: marked0, marked1, remapped, finalizable
-		- marked0, marked1: known to be marked?
-		- remapped: known to not point into relocation set?
-		- finalizable: only reachable through a finalizer?
+		- marked0, marked1: used to mark reachable objects
+    - remapped: reference is up to date and points to the current loction of object (= not pointing into relocation set)
+		- finalizable: object is only reachable through a finalizer
   - ZGC uses multi-mapping
     - multiple memory address in virtual memory -> a single address in physical memory
     - i.e. both "010<addr>" and "001<addr>" in virtual memory point to "<addr>" in physical memory
@@ -127,13 +138,18 @@
 		- [zgc/zGlobals_x86.cpp at master · openjdk/zgc · GitHub](https://github.com/openjdk/zgc/blob/master/src/hotspot/cpu/x86/gc/z/zGlobals_x86.cpp#L103)
 
 - Load Barriers
-  - code injected by JIT
-	- code that run whenever an app thread loads a reference from the heap
+  - code injected by JIT that run whenever an app thread loads a reference from the heap
 	- the purporse is to examine the reference’s state and potentially do work before returning the reference
 	- checks if a loaded object reference has a bad color; uses `test` and `jne`
 		- if so, enter slow path to fix color, and set it to mark/relocate/remap (= good color)
 	- depending on the stage of GC, the barrier either marks an object or relocates it if the reference isn't already marked/remapped
-	- about 4% execution overhead
+  - steps (works in a fall-through manner):
+    - It checks whether `remap` bit is set. If so, the color is good and it returns the reference.
+    - It checks whether a referenced object was in the relocation set. If it wasn't, an object doesn't need to get reloated. `remap` bit is set and it returns the updated reference.
+    - If an object has been relocated, it skips to the next step. Otherwise, it relocates an object and creates an entiry in the forwarding table.
+    - At this point, an object has been relocated. It updates the reference to the new address (either with the address from the previous step or by looking it up in the forwarding table), sets `remap` bit, and returns the reference
+	- about 4% execution overhead.
+
 
 - Striped Mark
 	- heap divided into logical stripes
@@ -163,17 +179,15 @@
       
 	- Phase 3: Pause Mark End
 		- synchronization point
-		- weak roots cleaning (i.e. string table)
 		- short pause of 1 ms to deal with a possible race due to weak referencing
-			- if roots are too big, it bails and goes back to concurrent mark
-			- if not ended, keep trying Concurrent Mark (`ZMarkTask`)
-		- liveness/reachability analysis is complete at the end of this phase
+			- if roots are too big or this phase is not completed, ZGC keeps trying Concurrent Mark (`ZMarkTask`)
+		- liveness/reachability analysis is completed at the end of this phase
     
   - Phase 4: Concurrent Process Non-Strong References
     - Steps:
       - process Soft/Weak/Final/PhantomReferences
-      - process concurrent weak roots
-      - unlink stale metadata and nmethods (native methods)
+      - process concurrent weak roots (i.e. string table)
+      - unlink stale metadata (class, class loader) and nmethods (JIT-compiled native methods)
       - perform handshake
         - ensures that stale metadata and nmethods are no longer observable
         - prevent the race where a mutator first loads a pointer, which is logically null but not yet cleared
@@ -181,7 +195,7 @@
       - unblock resurrection of weak/phantom references
       - purge stale metadata and nmethods that are unlinked
         - it doesn't remove anything, but it makes sure that nothing touches purged objects
-    - concurrent class unloading: unlink -> handshake -> purge
+    - concurrent class unloading occurs during unlink, handshake, and purge
     
   - Phase 5: Concurrent Reset Relocation Set
     - reset forwarding table and relocation set
@@ -218,16 +232,32 @@
 
 - Tuning
   - increase heap size: `-Xmx<size>`
-  - (maybe) set number of concurrent GC threads: `XX:ConGCThreads=<number>`
+    - heap should accomodate the live-set of an application
+    - there should be enough headroom in heap to allow allocations to be servied while GC is running
+    - trade memory for lower latency
+  - (maybe) increase number of concurrent GC threads: `XX:ConGCThreads=<number>`
+    - ZGC has heuristics to automatically select this number
+    - trade CPU-time for lower latency
   
 - Long-term goal
   - make ZGC generational: higher allocation rates, lower heap overhead, lower CPU usage
   - sub-ms max pause times (WIP)
+    - concurrent thread stack scanning
+    - low latency VM
+
+- Enhancements since JDK 11
+  - concurrent class unloading
+  - thread-local handshakes
+  - max heap size is 16 TB
+  - uncommit unused memory
 
 ## Appendix
 
 - JIT (Just-in-time) compliation: compliation at runtime
   - compiles a series of bytecode to native machine code and performs certain optimizations as well
+
+- Class metadata: internal representation of a class within JVM
+  - a class loader allocates space for metadata, which gets deallocated when the corresponding class is unloaded
 
 - Class loader: responsible for loading Java classes during runtime dinamically to JVM
   - load classes into memory when they're required by an application
@@ -255,3 +285,5 @@
   - most often used to schedule post-mortem cleanup actions
   - An object is phantom reachable if it is neither strongly, softly, nor weakly reachable, it has been finalized, and some phantom reference refers to it
   - Suppose an object is phantom reachable, GC will atomically clear all phantom references to that object and all phantom references to any other phantom reachable objects from which that object is reachable
+
+- Weak root: all references in it are weak references; they don't affect the liveness of objects referred to
