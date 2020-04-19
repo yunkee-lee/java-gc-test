@@ -175,7 +175,7 @@
 			- `ZMarkConcurrentRootsTask` -> `ZBarrier::ZBarrier::mark_barrier_on_oop_slow_path` -> `mark<Follow, Strong, Overflow>`
 		- Remap: remap live data
 			- walk object graph, which is the same as Mark phase, so Remap phase overlaps with Mark phase of the next GC cycle
-      - adjust old pointers to new pages as shown in forwarding tables
+			- adjust old pointers to new pages as shown in forwarding tables
 
 	- Phase 3: Pause Mark End
 		- synchronization point
