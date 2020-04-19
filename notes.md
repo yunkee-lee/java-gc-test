@@ -206,7 +206,7 @@
   - Phase 7: Concurrent Select Relocation Set
     - ZGC divides the heap up in to pages and concurrently selects a set of pages whose live objects need to be relocated
     - register relocatable pages with selector
-    - register live and garbage pages (garbase pages get reclaimed immediately)
+    - register live and garbage pages (garbage pages get reclaimed immediately)
     - allow pages to be deleted
     - select pages to relocate
 		- setup forwarding table (off heap)
