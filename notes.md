@@ -26,11 +26,11 @@
 	- smaller heaps cost more in overhead, but flexible
 		- allow Tenured to be collected in portions, which caps latency
 		- allow generations to be resized as necessary
-    
+
 - Humongous object: an object bigger than a Region
 	- allocated in continuous regions of Free space
 	- instantly added to Tenured
-  
+
 - G1GC reclaims heap by copying live data out of existing regions into empty regions
 	- naturally defragments as data gets consolidated into empty regions
 
@@ -160,13 +160,13 @@
 	- http://cr.openjdk.java.net/~pliden/slides/ZGC-PLMeetup-2019.pdf
 	- [zgc/zDriver.cpp at master · openjdk/zgc · GitHub](https://github.com/openjdk/zgc/blob/master/src/hotspot/share/gc/z/zDriver.cpp#L393)
 	- Pause -> STW, Concurrent -> app threads resumes
-  
+
 	- Phase 1: Pause Mark Start
 		- scan thread stacks
 		- mark objects pointed to roots (i.e. local / global variables)
 		- `ZMarkRootsTask` -> `ZBarrier::mark_barrier_on_root_oop_field` -> `mark<Follow, Strong, Publish>`
 		- very short pause since the number of objects is small
-    
+
 	- Phase 2: Concurrent Mark / Remap
 		- heaviest work
 		- Mark: walk object graph and mark all accessible objects (live set)
@@ -176,13 +176,13 @@
 		- Remap: remap live data
 			- walk object graph, which is the same as Mark phase, so Remap phase overlaps with Mark phase of the next GC cycle
       - adjust old pointers to new pages as shown in forwarding tables
-      
+
 	- Phase 3: Pause Mark End
 		- synchronization point
 		- short pause of 1 ms to deal with a possible race due to weak referencing
 			- if roots are too big or this phase is not completed, ZGC keeps trying Concurrent Mark (`ZMarkTask`)
 		- liveness/reachability analysis is completed at the end of this phase
-    
+
   - Phase 4: Concurrent Process Non-Strong References
     - Steps:
       - process Soft/Weak/Final/PhantomReferences
@@ -196,21 +196,21 @@
       - purge stale metadata and nmethods that are unlinked
         - it doesn't remove anything, but it makes sure that nothing touches purged objects
     - concurrent class unloading occurs during unlink, handshake, and purge
-    
+
   - Phase 5: Concurrent Reset Relocation Set
     - reset forwarding table and relocation set
-    
+
   - Phase 6: Pause Verify
     - verify roots and weak references
-    
+
   - Phase 7: Concurrent Select Relocation Set
-    - ZGC divides the heap up in to pages and concurrently selects a set of pages whose live objects need to be relocated 
+    - ZGC divides the heap up in to pages and concurrently selects a set of pages whose live objects need to be relocated
     - register relocatable pages with selector
     - register live and garbage pages (garbase pages get reclaimed immediately)
     - allow pages to be deleted
     - select pages to relocate
 		- setup forwarding table (off heap)
-    
+
   - Phase 8: Pause Relocate Start
     - another synchronization point; it finishes unloading stale metadata and nmethod, including class unloading
 		- scan thread stacks to handle roots pointing to relocating set
@@ -238,7 +238,7 @@
   - (maybe) increase number of concurrent GC threads: `XX:ConGCThreads=<number>`
     - ZGC has heuristics to automatically select this number
     - trade CPU-time for lower latency
-  
+
 - Long-term goal
   - make ZGC generational: higher allocation rates, lower heap overhead, lower CPU usage
   - sub-ms max pause times (WIP)
@@ -255,6 +255,9 @@
 
 - JIT (Just-in-time) compliation: compliation at runtime
   - compiles a series of bytecode to native machine code and performs certain optimizations as well
+
+- Metaspace: native memory region that has replaced PermGen starting in JDK 8
+  - contains metadata about an application running in JVM such as class and method definitions
 
 - Class metadata: internal representation of a class within JVM
   - a class loader allocates space for metadata, which gets deallocated when the corresponding class is unloaded
