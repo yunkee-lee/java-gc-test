@@ -11,6 +11,8 @@ G1GC_FLAGS = -XX:+UseG1GC \
 	-XX:ThreadPriorityPolicy=0 \
 	-Xlog:gc*:file=g1gc.log
 ZGC_FLAGS = -XX:+UnlockExperimentalVMOptions -XX:+UseZGC \
+	-XX:SoftMaxHeapSize=4G -Xmx6G \
+	-XX:ConcGCThreads=10 \
 	-Xlog:gc*:file=zgc.log
 
 .SUFFIXES: .java .class

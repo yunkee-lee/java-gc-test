@@ -24,7 +24,7 @@ public class Test {
     public static void run() throws InterruptedException {
         // small: 1024 * 256
         // large: 1024 * 512
-        int n = 1024 * 256;
+        int n = 1024 * 512;
         List<String[]> list = new LinkedList<>();
         WeakHashMap<String, String[]> wMap = new WeakHashMap<>();
 
