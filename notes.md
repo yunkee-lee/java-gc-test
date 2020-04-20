@@ -267,6 +267,9 @@
 
 - Finalizer: executed during object destruction, prior to the object being deallocated, and is complementary to an initializer
 
+- Reference Queue: GC enqueues reference objects after the appropriate reachability changes are detected
+  - it's a way for the GC to inform the program that a certain object is no longer reachable
+
 - Strong reference: the default type/class of a reference object
   - An object is strongly reachable if it can be reached by some thread without traversing any reference objects. A newly-created object is strongly reachable by the thread that created it.
 
