@@ -2,26 +2,18 @@ package com.yunkee.gctest;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.WeakHashMap;
 
 public class Test {
 
     private final static int SLEEP = 10;
 
     public static void main(String[] args) throws InterruptedException {
-        String testMode = "count";
-        if (args.length > 0) {
-            if (args[0].equals("time")) {
-                testMode = "time";
-            }
-        }
-
         MemoryStat memoryStat = new MemoryStat();
         new Thread(memoryStat).start();;
 
         Long startTime = System.currentTimeMillis();
-        if (testMode.equals("count")) {
-            runCountMode();
-        }
+        run();
         Long endTime = System.currentTimeMillis();
         Long elaspedSeconds = (endTime - startTime) / 1000;
 
@@ -29,19 +21,20 @@ public class Test {
         System.out.println("Finished. Runtime: " +  elaspedSeconds + " s");
     }
 
-    public static void runCountMode() throws InterruptedException {
+    public static void run() throws InterruptedException {
+        // small: 1024 * 256
+        // large: 1024 * 512
         int n = 1024 * 256;
         List<String[]> list = new LinkedList<>();
+        WeakHashMap<String, String[]> wMap = new WeakHashMap<>();
 
         for (int i = 0; i < n; i++) {
-            String[] emptyString = new String[1024];
-            list.add(emptyString);
+            list.add(new String[1024]);
+            wMap.put(String.valueOf(i), new String[1024]);
 
-            if (i % 100 == 0) {
+            if (i % 1024 == 0) {
                 Thread.sleep(SLEEP);
-            }
-            if (i % (1024 * 16) == 0) {
-                list = new LinkedList<>();
+                wMap.remove(String.valueOf(i));
             }
         }
     }
